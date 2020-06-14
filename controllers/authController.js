@@ -3,35 +3,26 @@ const bcryptjs = require("bcryptjs");
 const { validationResult } = require("express-validator");
 const jwt = require("jsonwebtoken");
 
-exports.crearUsuario = async (req, res) => {
+exports.autenticarUsuario = async (req, res) => {
   //Revisar si hay errores en el request
   const errores = validationResult(req);
-
-  //errores.isEmpty() va a dar false si efectivamente hay errores dentro del objeto errores, entonces lo niego con (!) para que pase a true y entre al if
   if (!errores.isEmpty()) {
     return res.status(400).json({ errores: errores.array() });
   }
-
-  //Extaer email y password para validaciones
+  //Extraer mail y password
   const { email, password } = req.body;
   try {
-    //Revisar que el usuario registrado sea unico
+    //Revisar que sea un usuario registrado
     let usuario = await Usuario.findOne({ email });
-    if (usuario) {
-      return res.status(400).json({ msg: "El usuario ya existe" });
+    if (!usuario) {
+      return res.status(400).json({ msg: "El usuario no existe" });
     }
-
-    //crea el usuario
-    usuario = new Usuario(req.body);
-
-    //Hashear el password
-    const salt = await bcryptjs.genSalt(10);
-
-    usuario.password = await bcryptjs.hash(password, salt);
-
-    //guardar el usuario
-    await usuario.save();
-
+    //Revisar el password .compare(), compara el password que viene del body y extrajimos, con el passw del usuario en la base de datos
+    const passCorrecto = await bcryptjs.compare(password, usuario.password);
+    if (!passCorrecto) {
+      return res.status(400).json({ msg: "El password es incorrecto " });
+    }
+    //Si todo es correcto me genera un token
     //Crear y firmar el JWT
     const payload = {
       usuario: {
@@ -42,13 +33,10 @@ exports.crearUsuario = async (req, res) => {
     //Firmar el JWT
     jwt.sign(
       payload,
-
       process.env.SECRETA,
-
       {
         expiresIn: 3600, //1hora
       },
-
       (error, token) => {
         if (error) throw error;
         //Mensaje de confirmacion
@@ -57,6 +45,5 @@ exports.crearUsuario = async (req, res) => {
     );
   } catch (error) {
     console.log(error);
-    res.status(400).send("Hubo un error");
   }
 };
